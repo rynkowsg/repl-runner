@@ -59,6 +59,10 @@
     {:name "clojure.main+REBL"
      :exec #(do ((:rebl mains)) ((:nrepl mains)))}
 
+    (:nrepl mains)
+    {:name "Interactive nREPL"
+     :exec #((:nrepl mains) "--interactive")}
+
     (:rebel mains)
     {:name "Rebel"
      :exec #((:rebel mains))}
