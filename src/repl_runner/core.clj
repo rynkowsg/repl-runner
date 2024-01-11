@@ -9,6 +9,7 @@
         :nrepl    'nrepl.cmdline/-main
         :rebel    'rebel-readline.main/-main
         :rebl     'cognitect.rebl/-main
+        :morse 'dev.nu.morse/-main
         :reveal   'vlaaad.reveal/repl}
        (map-vals #(u/try-it (requiring-resolve %)))
        (filter-vals some?)))
@@ -51,13 +52,28 @@
                                ["--interactive"])]
               (apply (:nrepl mains) nrepl-args))}
 
+    (and (:nrepl mains) (:morse mains))
+    {:name "nREPL+morse"
+     :exec #(let [nrepl-args (if (u/try-it (requiring-resolve 'morse-nrepl/wrap))
+                               ["--interactive" "--middleware" "[morse-nrepl/wrap]"]
+                               ["--interactive"])]
+              (apply (:nrepl mains) nrepl-args))}
+
     (and (:rebel mains) (:rebl mains))
     {:name "Rebel+REBL"
      :exec #(do ((requiring-resolve 'cognitect.rebl/ui)) ((:rebel mains)))}
 
+    (and (:rebel mains) (:morse mains))
+    {:name "Rebel+morse"
+     :exec #(do ((requiring-resolve 'cognitect.rebl/launch-in-proc)) ((:rebel mains)))}
+
     (and (:clojure mains) (:rebl mains))
     {:name "clojure.main+REBL"
      :exec #(do ((:rebl mains)) ((:nrepl mains)))}
+
+    (and (:clojure mains) (:morse mains))
+    {:name "clojure.main+morse"
+     :exec #(do ((:morse mains)) ((:nrepl mains)))}
 
     (:nrepl mains)
     {:name "Interactive nREPL"
