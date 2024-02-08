@@ -1,42 +1,32 @@
-(ns repl-runner.core
+(ns pl.rynkowski.repl-runner
   (:require
    [medley.core :refer [map-vals filter-vals]]
-   [repl-runner.utils :as u]))
+   [pl.rynkowski.repl-runner.checks :as rrc]
+   [pl.rynkowski.repl-runner.tools :as rrt]
+   [pl.rynkowski.repl-runner.utils :as rru]))
 
 (defn find-mains []
-  (->> {:clojure  'clojure.main/main
+  "Composes a map of popular REPL starting main functions."
+  (->> {:clojure 'clojure.main/main
         :figwheel 'figwheel.main/-main
-        :nrepl    'nrepl.cmdline/-main
-        :rebel    'rebel-readline.main/-main
-        :rebl     'cognitect.rebl/-main
+        :nrepl 'nrepl.cmdline/-main
+        :rebel 'rebel-readline.main/-main
+        :rebl 'cognitect.rebl/-main
         :morse 'dev.nu.morse/-main
-        :reveal   'vlaaad.reveal/repl}
-       (map-vals #(u/try-it (requiring-resolve %)))
+        :reveal 'vlaaad.reveal/repl}
+       (map-vals #(rru/try-it (requiring-resolve %)))
        (filter-vals some?)))
 
-; About nREPL REBL middleware
-; There are two published middlewares that send forms to REBL:
-; - https://github.com/RickMoynihan/nrebl.middleware
-; - https://github.com/DaveWM/nrepl-rebl
-; When using the first one, you have to take care of launching the REPL yourself
-; and Cursive internal forms evaluations are sent too, which is annoying.
-; When using the second one, it runs REBL itself and filters out all the Cursive internal forms.
-;
-; About REBL and Rebel
-; At the moment I couldn't figure out how to support sending forms from Rebel to REBL.
-; So you can either have REBL or Rebel.
-;
-; Inspiration:
-; https://github.com/seancorfield/dot-clojure/blob/develop/dev.clj
-
+; Inspired by: https://github.com/seancorfield/dot-clojure/blob/3c12189d333c719e387fd271a1c2d9f3eeb89a6c/dev.clj
 (defn determine-strategy [mains]
+  "Depends on the given main fns provided, determine strategy for the REPL start process."
   (cond
     (empty? mains)
     (throw (ex-info "No mains has been found." mains))
 
     (and (:nrepl mains) (:rebel mains) (:rebl mains))
     {:name "nREPL+Rebel+REBL"
-     :exec #(let [nrepl-args (if (u/try-it (requiring-resolve 'nrebl.middleware/wrap-nrebl))
+     :exec #(let [nrepl-args (if (rru/try-it (requiring-resolve 'nrebl.middleware/wrap-nrebl))
                                ["--interactive" "--middleware" "[nrebl.middleware/wrap-nrebl]" "--repl-fn" "rebel-readline.main/-main"]
                                ["--interactive" "--repl-fn" "rebel-readline.main/-main"])]
               (apply (:nrepl mains) nrepl-args))}
@@ -47,16 +37,17 @@
 
     (and (:nrepl mains) (:rebl mains))
     {:name "nREPL+REBL"
-     :exec #(let [nrepl-args (if (u/try-it (requiring-resolve 'nrebl.middleware/wrap-nrebl))
+     :exec #(let [nrepl-args (if (rru/try-it (requiring-resolve 'nrebl.middleware/wrap-nrebl))
                                ["--interactive" "--middleware" "[nrebl.middleware/wrap-nrebl]"]
                                ["--interactive"])]
               (apply (:nrepl mains) nrepl-args))}
 
     (and (:nrepl mains) (:morse mains))
     {:name "nREPL+morse"
-     :exec #(let [nrepl-args (if (u/try-it (requiring-resolve 'morse-nrepl/wrap))
-                               ["--interactive" "--middleware" "[morse-nrepl/wrap]"]
+     :exec #(let [nrepl-args (if (rru/try-it (requiring-resolve 'pl.rynkowski.morse-nrepl/wrap))
+                               ["--interactive" "--middleware" "[pl.rynkowski.morse-nrepl/wrap]"]
                                ["--interactive"])]
+
               (apply (:nrepl mains) nrepl-args))}
 
     (and (:rebel mains) (:rebl mains))
@@ -94,14 +85,18 @@
     :else
     (throw (ex-info "The available mains are not supported" mains))))
 
-(defn launch-repl [{:keys [name exec]}]
+(comment
+ (find-mains)
+ (-> (find-mains) (determine-strategy)))
+
+(defn launch-repl
+  [{:keys [name exec]}]
   (println "Starting" name "as the REPL...")
   (exec))
 
 (defn- start-repl []
-  (u/check-requiring-resolve)
-  (u/setup-dcl)
-  (u/setup-jedi)
+  (rrc/check-requiring-resolve)
+  (rrt/start-morse-if-requested)
   (-> (find-mains)
       (determine-strategy)
       (launch-repl)))
@@ -109,8 +104,3 @@
 (defn -main [& _args]
   (start-repl)
   (System/exit 0))
-
-#_(comment
-   (-> (find-mains)
-       (determine-strategy)
-       (launch-repl)).)
